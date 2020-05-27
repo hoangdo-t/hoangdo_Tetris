@@ -75,8 +75,8 @@ const Color DARK_COLORS[] = {
 #define GRID_SIZE 30 //lưới
 
 #define ARRAY_COUNT(x) (sizeof(x) / sizeof((x)[0]))
-
-const u8 FRAMES_PER_DROP[] = {45,40,35,30,25,20,15,10,8,6,5,4,3,2,1};
+//15 level
+const u8 FRAMES_PER_DROP[] = {45,40,35,30,25,20,15,10,8,6,5,4,3,2,1}; // tốc độ của từng level =FRAMES_PER_DROP[]*TARGET_SECONDS_PER_FRAME 
 
 const f32 TARGET_SECONDS_PER_FRAME = 1.f / 60.f;
 
@@ -155,7 +155,7 @@ enum Game_Phase
 struct Piece_State
 {
     u8 tetrino_index;
-    int offset_row; //offset : bù lại
+    int offset_row;
     int offset_col;
     int rotation; //quay
 };
@@ -202,7 +202,7 @@ inline u8 matrix_get(const u8 *values, int width, int row, int col)
     int index = row * width + col;
     return values[index];
 }
-//ma trận khi khối gạch hợp thể:))
+//ma trận khi khối gạch hợp nhất
 inline void matrix_set(u8 *values, int width, int row, int col, u8 value)
 {
     int index = row * width + col;
@@ -237,7 +237,7 @@ inline u8 check_row_filled(const u8 *values, int width, int row)
     }
     return 1;
 }
-//kiểm tra hàng trống nếu ko còn => game over
+//kiểm tra hàng trống 
 inline u8 check_row_empty(const u8 *values, int width, int row)
 {
     for (int col = 0;col < width; ++col)
@@ -451,7 +451,7 @@ void update_game_gameover(Game_State *game, const Input_State *input)
         game->phase = GAME_START;
     }
 }
-//load game sau khi xóa đi các dòng
+//
 void update_game_line(Game_State *game)
 {
     if (game->time >= game->highlight_end_time)
@@ -470,15 +470,15 @@ void update_game_line(Game_State *game)
         game->phase = GAME_PLAY;
     }
 }
-
+// di chuyển trong game
 void game_play(Game_State *game , const Input_State *input)
 {
-    Piece_State piece = game->piece; //piece bằng con trỏ trỏ đến piece
-    if (input->dleft > 0)  // dich trai thi gia tri vào(input) giảm
+    Piece_State piece = game->piece; 
+    if (input->dleft > 0)  
     {
         --piece.offset_col;
     }
-    if (input->dright> 0)   //dich phai thi gia tri tang
+    if (input->dright> 0)   
     {
         ++piece.offset_col;
     }
@@ -539,7 +539,7 @@ void update_game(Game_State *game , const Input_State *input)
         break;
     }
 }
-//tô màu bên trong
+//tô màu 
 void fill_rect(SDL_Renderer *renderer , int x , int y , int width, int height, Color color)
 {
     SDL_Rect rect = {};
@@ -551,7 +551,7 @@ void fill_rect(SDL_Renderer *renderer , int x , int y , int width, int height, C
     SDL_RenderFillRect(renderer, &rect);
 }
 
-
+//vẽ viền
 void draw_rect(SDL_Renderer *renderer,
           int x, int y, int width, int height, Color color)
 {
@@ -594,7 +594,7 @@ void draw_string(SDL_Renderer *renderer,
     SDL_FreeSurface(surface);
     SDL_DestroyTexture(texture);
 }
-
+// vẽ 1 ô
 void draw_cell(SDL_Renderer *renderer,
           int row, int col, u8 value,
           int offset_x, int offset_y,
@@ -671,15 +671,15 @@ void render_game(const Game_State *game , SDL_Renderer *renderer , TTF_Font *fon
 {
     char buffer[4096];
 
-    Color highlight_color = color(0xFF, 0xFF, 0xFF, 0xFF);
+    Color highlight_color = color(0xFF, 0xFF, 0xFF, 0xFF); //màu khi 1 hàng đầy(trắng)
 
     int margin_y = 60;
 
-    draw_board(renderer, game->board, WIDTH, HEIGHT, 0, margin_y);// vẽ khối khi rơi xuống cuối
+    draw_board(renderer, game->board, WIDTH, HEIGHT, 0, margin_y);
 
     if (game->phase == GAME_PLAY)
     {
-        draw_piece(renderer, &game->piece, 0, margin_y);//vẽ đang rơi
+        draw_piece(renderer, &game->piece, 0, margin_y);
 
         Piece_State piece = game->piece;
         while (check_piece_valid(&piece, game->board, WIDTH, HEIGHT))
@@ -688,7 +688,7 @@ void render_game(const Game_State *game , SDL_Renderer *renderer , TTF_Font *fon
         }
         --piece.offset_row;
 
-        draw_piece(renderer, &piece, 0, margin_y, true); //vẽ khối gợi ý
+        draw_piece(renderer, &piece, 0, margin_y, true); 
 
     }
 
@@ -777,9 +777,7 @@ int main(int argc, char* argv[])
 
     Game_State game = {};
     Input_State input = {};
-
     spawn_piece(&game);
-
     game.piece.tetrino_index = 2;
     //tạo vòng lặp để cửa sổ hiện ra liên tục
     bool quit = false;
