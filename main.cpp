@@ -286,7 +286,7 @@ void clear_lines(u8 *values, int width, int height, const u8 *lines)
     }
 }
 
-//không cho khối gạch vượt biên
+//ko  để khối gạch vượt biên
 bool check_piece_valid(const Piece_State *piece,
                   const u8 *board, int width, int height)
 {
@@ -451,7 +451,7 @@ void update_game_gameover(Game_State *game, const Input_State *input)
         game->phase = GAME_START;
     }
 }
-//
+//load lại hàng gạch sau khi xóa
 void update_game_line(Game_State *game)
 {
     if (game->time >= game->highlight_end_time)
@@ -563,37 +563,6 @@ void draw_rect(SDL_Renderer *renderer,
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
     SDL_RenderDrawRect(renderer, &rect);
 }
-//khởi tạo các định dạng của chữ
-void draw_string(SDL_Renderer *renderer,
-                 TTF_Font *font,const char *text,
-                 int x, int y,
-                 Text_Align alignment,Color color)
-{
-    SDL_Color sdl_color = SDL_Color { color.r, color.g, color.b, color.a };
-    SDL_Surface *surface = TTF_RenderText_Solid(font, text, sdl_color);
-    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
-
-    SDL_Rect rect;
-    rect.y = y;
-    rect.w = surface->w;
-    rect.h = surface->h;
-    switch (alignment)
-    {
-    case TEXT_ALIGN_LEFT:
-        rect.x = x;
-        break;
-    case TEXT_ALIGN_CENTER:
-        rect.x = x - surface->w / 2;
-        break;
-    case TEXT_ALIGN_RIGHT:
-        rect.x = x - surface->w;
-        break;
-    }
-
-    SDL_RenderCopy(renderer, texture, 0, &rect);
-    SDL_FreeSurface(surface);
-    SDL_DestroyTexture(texture);
-}
 // vẽ 1 ô
 void draw_cell(SDL_Renderer *renderer,
           int row, int col, u8 value,
@@ -665,6 +634,38 @@ void draw_board(SDL_Renderer *renderer,
             }
         }
     }
+}
+
+//khởi tạo các định dạng của chữ
+void draw_string(SDL_Renderer *renderer,
+                 TTF_Font *font,const char *text,
+                 int x, int y,
+                 Text_Align alignment,Color color)
+{
+    SDL_Color sdl_color = SDL_Color { color.r, color.g, color.b, color.a };
+    SDL_Surface *surface = TTF_RenderText_Solid(font, text, sdl_color);
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+
+    SDL_Rect rect;
+    rect.y = y;
+    rect.w = surface->w;
+    rect.h = surface->h;
+    switch (alignment)
+    {
+    case TEXT_ALIGN_LEFT:
+        rect.x = x;
+        break;
+    case TEXT_ALIGN_CENTER:
+        rect.x = x - surface->w / 2;
+        break;
+    case TEXT_ALIGN_RIGHT:
+        rect.x = x - surface->w;
+        break;
+    }
+
+    SDL_RenderCopy(renderer, texture, 0, &rect);
+    SDL_FreeSurface(surface);
+    SDL_DestroyTexture(texture);
 }
 
 void render_game(const Game_State *game , SDL_Renderer *renderer , TTF_Font *font)
