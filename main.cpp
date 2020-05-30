@@ -457,6 +457,9 @@ void update_game_line(Game_State *game)
     if (game->time >= game->highlight_end_time)
     {
         clear_lines(game->board, WIDTH, HEIGHT, game->lines);
+	 Mix_Chunk* destroy = NULL;
+        destroy= Mix_LoadWAV("destroy.wav");
+        Mix_PlayChannel(-1, destroy, 0);
         game->line_count += game->pending_line_count;
         game->points += compute_points(game->level, game->pending_line_count);
 
