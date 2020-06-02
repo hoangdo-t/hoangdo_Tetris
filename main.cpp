@@ -9,21 +9,10 @@
 #include "SDL_mixer.h"
 
 typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef int s8;
-typedef int s16;
-//typedef int s32;
-typedef float f32;
-typedef double f64;
 
-//#include "colors.h"
 typedef struct Color
 {
-    u8 r;
-    u8 g;
-    u8 b;
-    u8 a;
+    u8 r,g,b,a;
 } Color;
 
 inline Color
@@ -71,22 +60,22 @@ const Color DARK_COLORS[] = {
 };
 #define WIDTH 10
 #define HEIGHT 22
-#define VISIBLE_HEIGHT 20
-#define GRID_SIZE 30 //lưới
+#define REAL_HEIGHT 20
+#define GRID_SIZE 30
 
 #define ARRAY_COUNT(x) (sizeof(x) / sizeof((x)[0]))
-//15 level
-const u8 FRAMES_PER_DROP[] = {45,40,35,30,25,20,15,10,8,6,5,4,3,2,1}; // tốc độ của từng level =FRAMES_PER_DROP[]*TARGET_SECONDS_PER_FRAME 
 
-const f32 TARGET_SECONDS_PER_FRAME = 1.f / 60.f;
+const u8 CONST_LEVEL[] = {45,40,35,30,25,20,15,10,8,6,5,4,3,2,1};
 
-struct Tetrino    //ma tran cua khoi gach
+const float CONST_SPEED = 1.f / 60.f;
+
+struct Khoigach
 {
     const u8 *data;
     const int side;
 };
 
-inline Tetrino tetrino(const u8 *data, int side)
+inline Khoigach khoigach(const u8 *data, int side)
 {
     return { data, side };
 }
@@ -133,17 +122,15 @@ const u8 KHOI_J[] = {
     0, 0, 0
 };
 
-
-const Tetrino TETRINOS[] = {
-    tetrino(KHOI_I, 4),
-    tetrino(KHOI_O, 2),
-    tetrino(KHOI_T, 3),
-    tetrino(KHOI_S, 3),
-    tetrino(KHOI_Z, 3),
-    tetrino(KHOI_L, 3),
-    tetrino(KHOI_J, 3),
+const Khoigach KHOIGACH[] = {
+    khoigach(KHOI_I, 4),
+    khoigach(KHOI_O, 2),
+    khoigach(KHOI_T, 3),
+    khoigach(KHOI_S, 3),
+    khoigach(KHOI_Z, 3),
+    khoigach(KHOI_L, 3),
+    khoigach(KHOI_J, 3),
 };
-
 enum Game_Phase
 {
     GAME_START,
@@ -157,75 +144,62 @@ struct Piece_State
     u8 tetrino_index;
     int offset_row;
     int offset_col;
-    int rotation; //quay
+    int rotation;
 };
 
 struct Game_State
 {
-    u8 board[WIDTH * HEIGHT]; //bảng
+    u8 board[WIDTH * HEIGHT];
     u8 lines[HEIGHT];
     int pending_line_count;
     Piece_State piece;
     Game_Phase phase;
-    int start_level;
-    int level;
-    int line_count;
-    int points;
-    f32 next_drop_time;
-    f32 highlight_end_time;
-    f32 time;
+    int start_level,level,line_count,points;
+    float next_drop_time,highlight,time;
 };
 
 struct Input_State
 {
-    u8 left;
-    u8 right;
-    u8 up;
-    u8 down;
-    u8 a;
-    s8 dleft;
-    s8 dright;
-    s8 dup;
-    s8 ddown;
-    s8 da;
+    u8 left,right,up,down,a;
+    int dleft,dright,dup,ddown,da;
 };
 
 enum Text_Align
 {
     TEXT_ALIGN_LEFT,
-    TEXT_ALIGN_CENTER,//căn vị trí văn bản
+    TEXT_ALIGN_CENTER,
     TEXT_ALIGN_RIGHT
 };
-//ma trận khối gạch
+
 inline u8 matrix_get(const u8 *values, int width, int row, int col)
 {
     int index = row * width + col;
     return values[index];
 }
-//ma trận khi khối gạch hợp nhất
+
 inline void matrix_set(u8 *values, int width, int row, int col, u8 value)
 {
     int index = row * width + col;
     values[index] = value;
 }
 
-inline u8 tetrino_get(const Tetrino *tetrino, int row, int col, int rotation)
-{//===========gia tri khi quay khoi gach
-    int side = tetrino->side;
+inline u8 tetrino_get(const Khoigach *khoigach, int row, int col, int rotation)
+{
+    int side = khoigach->side;
     switch (rotation)
     {
     case 0:
-        return tetrino->data[row * side + col];
+        return khoigach->data[row * side + col];
     case 1:
-        return tetrino->data[(side - col - 1) * side + row];
+        return khoigach->data[(side - col - 1) * side + row];
     case 2:
-        return tetrino->data[(side - row - 1) * side + (side - col - 1)];
+        return khoigach->data[(side - row - 1) * side + (side - col - 1)];
     case 3:
-        return tetrino->data[col * side + (side - row - 1)];
+        return khoigach->data[col * side + (side - row - 1)];
     }
     return 0;
 }
-//ktra hàng bị đầy
+
 inline u8 check_row_filled(const u8 *values, int width, int row)
 {
     for (int col = 0;col < width;++col)
@@ -237,7 +211,7 @@ inline u8 check_row_filled(const u8 *values, int width, int row)
     }
     return 1;
 }
-//kiểm tra hàng trống 
+
 inline u8 check_row_empty(const u8 *values, int width, int row)
 {
     for (int col = 0;col < width; ++col)
@@ -261,7 +235,7 @@ int find_lines(const u8 *values, int width, int height, u8 *lines_out)
     }
     return count;
 }
-//xóa 1 hàng khi hàng đó đầy
+
 void clear_lines(u8 *values, int width, int height, const u8 *lines)
 {
     int src_row = height - 1;
@@ -286,18 +260,17 @@ void clear_lines(u8 *values, int width, int height, const u8 *lines)
     }
 }
 
-//ko  để khối gạch vượt biên
 bool check_piece_valid(const Piece_State *piece,
                   const u8 *board, int width, int height)
 {
-    const Tetrino *tetrino = TETRINOS + piece->tetrino_index;
-    assert(tetrino);
+    const Khoigach *khoigach = KHOIGACH+ piece->tetrino_index;
+    assert(khoigach);
 
-    for (int row = 0;row < tetrino->side;++row)
+    for (int row = 0;row < khoigach->side;++row)
     {
-        for (int col = 0;col < tetrino->side;++col)
+        for (int col = 0;col < khoigach->side;++col)
         {
-            u8 value = tetrino_get(tetrino, row, col, piece->rotation);
+            u8 value = tetrino_get(khoigach, row, col, piece->rotation);
             if (value > 0)
             {
                 int board_row = piece->offset_row + row;
@@ -327,15 +300,15 @@ bool check_piece_valid(const Piece_State *piece,
     }
     return true;
 }
-// hợp nhất khối gạch
+
 void merge_piece(Game_State *game)
 {
-    const Tetrino *tetrino = TETRINOS + game->piece.tetrino_index;
-    for (int row = 0;row < tetrino->side;++row)
+    const Khoigach *khoigach = KHOIGACH + game->piece.tetrino_index;
+    for (int row = 0;row < khoigach->side;++row)
     {
-        for (int col = 0;col < tetrino->side;++col)
+        for (int col = 0;col < khoigach->side;++col)
         {
-            u8 value = tetrino_get(tetrino, row, col, game->piece.rotation);
+            u8 value = tetrino_get(khoigach, row, col, game->piece.rotation);
             if (value)
             {
                 int board_row = game->piece.offset_row + row;
@@ -345,31 +318,30 @@ void merge_piece(Game_State *game)
         }
     }
 }
-//các khối gạch rơi ngẫu nhiên
+
 inline int random_int(int min, int max)
 {
     int range = max - min;
     return min + rand() % range;
 }
-//level max là 15
-inline f32 get_time_to_next_drop(int level)
+
+inline float get_time_to_next_drop(int level)
 {
     if (level > 15)
     {
         level = 15;
     }
-    return FRAMES_PER_DROP[level] * TARGET_SECONDS_PER_FRAME; //level tăng thì tốc độ rơi tăng
+    return CONST_LEVEL[level] * CONST_SPEED;
+
 }
-
-
 void spawn_piece(Game_State *game)
 {
     game->piece = {};
-    game->piece.tetrino_index = (u8)random_int(0, ARRAY_COUNT(TETRINOS));
+    game->piece.tetrino_index = (u8)random_int(0, ARRAY_COUNT(KHOIGACH));
     game->piece.offset_col = WIDTH / 2;
     game->next_drop_time = game->time + get_time_to_next_drop(game->level);
 }
-// rơi <
+
 inline bool soft_drop(Game_State *game)
 {
     ++game->piece.offset_row;
@@ -383,8 +355,8 @@ inline bool soft_drop(Game_State *game)
     game->next_drop_time = game->time + get_time_to_next_drop(game->level);
     return true;
 }
-// tính điểm
-inline int compute_points(int level, int line_count)
+
+inline int count_points(int level, int line_count)
 {
     switch (line_count)
     {
@@ -420,8 +392,7 @@ inline int get_lines_for_next_level(int start_level, int level)
     int diff = level - start_level;
     return first_level_up_limit + diff * 10;
 }
-//bắt đầu vào  game
-void game_start(Game_State *game, const Input_State *input) // s32
+void game_start(Game_State *game, const Input_State *input)
 {
     if (input->dup > 0)
     {
@@ -443,7 +414,7 @@ void game_start(Game_State *game, const Input_State *input) // s32
         game->phase = GAME_PLAY;
     }
 }
-//sau khi game over thì chơi lại
+
 void update_game_gameover(Game_State *game, const Input_State *input)
 {
     if (input->da > 0)
@@ -451,37 +422,39 @@ void update_game_gameover(Game_State *game, const Input_State *input)
         game->phase = GAME_START;
     }
 }
-//load lại hàng gạch sau khi xóa
+
 void update_game_line(Game_State *game)
 {
-    if (game->time >= game->highlight_end_time)
+    if (game->time >= game->highlight)
     {
         clear_lines(game->board, WIDTH, HEIGHT, game->lines);
-	 Mix_Chunk* destroy = NULL;
+        Mix_Chunk* destroy = NULL;
         destroy= Mix_LoadWAV("destroy.wav");
         Mix_PlayChannel(-1, destroy, 0);
         game->line_count += game->pending_line_count;
-        game->points += compute_points(game->level, game->pending_line_count);
+        game->points += count_points(game->level, game->pending_line_count);
 
         int lines_for_next_level = get_lines_for_next_level(game->start_level, game->level);
 
         if (game->line_count >= lines_for_next_level)
         {
             ++game->level;
+            Mix_Chunk* next_level = NULL;
+            next_level= Mix_LoadWAV("next_level.wav");
+            Mix_PlayChannel(-1, next_level, 0);
         }
-
         game->phase = GAME_PLAY;
     }
 }
-// di chuyển trong game
+
 void game_play(Game_State *game , const Input_State *input)
 {
-    Piece_State piece = game->piece; 
-    if (input->dleft > 0)  
+    Piece_State piece = game->piece;
+    if (input->dleft > 0)
     {
         --piece.offset_col;
     }
-    if (input->dright> 0)   
+    if (input->dright> 0)
     {
         ++piece.offset_col;
     }
@@ -490,7 +463,7 @@ void game_play(Game_State *game , const Input_State *input)
         piece.rotation = (piece.rotation + 1) % 4;
     }
 
-    if (check_piece_valid(&piece, game->board, WIDTH, HEIGHT))    //!!!!!
+    if (check_piece_valid(&piece, game->board, WIDTH, HEIGHT))
     {
         game->piece = piece;
     }
@@ -514,7 +487,7 @@ void game_play(Game_State *game , const Input_State *input)
     if (game->pending_line_count > 0)
     {
         game->phase = GAME_LINE;
-        game->highlight_end_time = game->time + 0.5f;
+        game->highlight = game->time + 0.5f;
     }
 
     int game_over_row = 0;
@@ -523,7 +496,6 @@ void game_play(Game_State *game , const Input_State *input)
         game->phase = GAME_GAMEOVER;
     }
 }
-
 void update_game(Game_State *game , const Input_State *input)
 {
     switch(game->phase)
@@ -542,19 +514,16 @@ void update_game(Game_State *game , const Input_State *input)
         break;
     }
 }
-//tô màu 
 void fill_rect(SDL_Renderer *renderer , int x , int y , int width, int height, Color color)
 {
     SDL_Rect rect = {};
-    rect.x = x;//vị trí của góc trên bên trái
+    rect.x = x;
     rect.y = y;
     rect.w = width;
     rect.h = height;
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
     SDL_RenderFillRect(renderer, &rect);
 }
-
-//vẽ viền
 void draw_rect(SDL_Renderer *renderer,
           int x, int y, int width, int height, Color color)
 {
@@ -566,7 +535,6 @@ void draw_rect(SDL_Renderer *renderer,
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
     SDL_RenderDrawRect(renderer, &rect);
 }
-// vẽ 1 ô
 void draw_cell(SDL_Renderer *renderer,
           int row, int col, u8 value,
           int offset_x, int offset_y,
@@ -575,7 +543,6 @@ void draw_cell(SDL_Renderer *renderer,
     Color base_color = BASE_COLORS[value];
     Color light_color = LIGHT_COLORS[value];
     Color dark_color = DARK_COLORS[value];
-
 
     int edge = GRID_SIZE / 8;
 
@@ -590,22 +557,21 @@ void draw_cell(SDL_Renderer *renderer,
 
     fill_rect(renderer, x, y, GRID_SIZE, GRID_SIZE, dark_color);
     fill_rect(renderer, x + edge, y,
-              GRID_SIZE - edge, GRID_SIZE - edge, light_color);
+           GRID_SIZE - edge, GRID_SIZE - edge, light_color);
     fill_rect(renderer, x + edge, y + edge,
               GRID_SIZE - edge * 2, GRID_SIZE - edge * 2, base_color);
 }
-//vẽ các khối
 void draw_piece(SDL_Renderer *renderer,
            const Piece_State *piece,
            int offset_x, int offset_y,
            bool outline = false)
 {
-    const Tetrino *tetrino = TETRINOS + piece->tetrino_index;
-    for (int row = 0;row < tetrino->side;++row)
+    const Khoigach *khoigach = KHOIGACH + piece->tetrino_index;
+    for (int row = 0;row < khoigach->side;++row)
     {
-        for (int col = 0;col < tetrino->side;++col)
+        for (int col = 0;col < khoigach->side;++col)
         {
-            u8 value = tetrino_get(tetrino, row, col, piece->rotation);
+            u8 value = tetrino_get(khoigach, row, col, piece->rotation);
             if (value)
             {
                 draw_cell(renderer,
@@ -618,7 +584,6 @@ void draw_piece(SDL_Renderer *renderer,
         }
     }
 }
-
 void draw_board(SDL_Renderer *renderer,
            const u8 *board, int width, int height,
            int offset_x, int offset_y)
@@ -639,7 +604,6 @@ void draw_board(SDL_Renderer *renderer,
     }
 }
 
-//khởi tạo các định dạng của chữ
 void draw_string(SDL_Renderer *renderer,
                  TTF_Font *font,const char *text,
                  int x, int y,
@@ -665,7 +629,6 @@ void draw_string(SDL_Renderer *renderer,
         rect.x = x - surface->w;
         break;
     }
-
     SDL_RenderCopy(renderer, texture, 0, &rect);
     SDL_FreeSurface(surface);
     SDL_DestroyTexture(texture);
@@ -675,7 +638,7 @@ void render_game(const Game_State *game , SDL_Renderer *renderer , TTF_Font *fon
 {
     char buffer[4096];
 
-    Color highlight_color = color(0xFF, 0xFF, 0xFF, 0xFF); //màu khi 1 hàng đầy(trắng)
+    Color highlight_color = color(0x00, 0xFF, 0xFF, 0xFF);
 
     int margin_y = 60;
 
@@ -692,10 +655,9 @@ void render_game(const Game_State *game , SDL_Renderer *renderer , TTF_Font *fon
         }
         --piece.offset_row;
 
-        draw_piece(renderer, &piece, 0, margin_y, true); 
+        draw_piece(renderer, &piece, 0, margin_y, true);
 
     }
-
     if (game->phase == GAME_LINE)
     {
         for (int row = 0;row < HEIGHT;++row)
@@ -705,15 +667,15 @@ void render_game(const Game_State *game , SDL_Renderer *renderer , TTF_Font *fon
                 int x = 0;
                 int y = row * GRID_SIZE + margin_y;
 
-                fill_rect(renderer, x, y,
-                          WIDTH * GRID_SIZE, GRID_SIZE, highlight_color);
+                fill_rect(renderer, x, y,WIDTH * GRID_SIZE, GRID_SIZE, highlight_color);
             }
         }
     }
     else if (game->phase == GAME_GAMEOVER)
     {
-
-
+        Mix_Chunk* gameover = NULL;
+        gameover= Mix_LoadWAV("gameover.wav");
+        Mix_PlayChannel(-1, gameover, 0);
         int x = WIDTH * GRID_SIZE / 2;
         int y = (HEIGHT * GRID_SIZE + margin_y) / 2;
         draw_string(renderer, font, "GAME OVER ",
@@ -722,7 +684,6 @@ void render_game(const Game_State *game , SDL_Renderer *renderer , TTF_Font *fon
                     x, y+40, TEXT_ALIGN_CENTER, highlight_color);
         snprintf(buffer, sizeof(buffer), "HIGHT SCORE: %d", game->points);
         draw_string(renderer, font,buffer ,x, y-30, TEXT_ALIGN_CENTER, highlight_color);
-
     }
     else if (game->phase == GAME_START)
     {
@@ -736,11 +697,9 @@ void render_game(const Game_State *game , SDL_Renderer *renderer , TTF_Font *fon
                     x, y + 30, TEXT_ALIGN_CENTER, highlight_color);
     }
 
-    fill_rect(renderer,
-              0, margin_y,
-              WIDTH * GRID_SIZE, (HEIGHT - VISIBLE_HEIGHT) * GRID_SIZE,
+    fill_rect(renderer,0, margin_y,
+              WIDTH * GRID_SIZE, (HEIGHT - REAL_HEIGHT) * GRID_SIZE,
               color(0x00, 0x00, 0x00, 0x00));
-
 
     snprintf(buffer, sizeof(buffer), "LEVEL: %d", game->level);
     draw_string(renderer, font, buffer, 50, 5, TEXT_ALIGN_LEFT, highlight_color);
@@ -754,36 +713,29 @@ void render_game(const Game_State *game , SDL_Renderer *renderer , TTF_Font *fon
 
 int main(int argc, char* argv[])
 {
-    srand(time(NULL)); //để random sau mỗi lần chơi lại
-    if (SDL_Init(SDL_INIT_VIDEO) < 0)
-    {
-        return 1;
-    }
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) return 1;
+    if (TTF_Init() < 0) return 2;
 
-    if (TTF_Init() < 0)
-    {
-        return 2;
-    }
-    //tạo cửa sổ cho game
-    SDL_Window *window = SDL_CreateWindow("GAME TETRIS - XẾP GẠCH",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,460,720,
+    SDL_Window *window = SDL_CreateWindow("GAME TETRIS - XẾP GẠCH",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,480,720,
         SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window,-1,
                     SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    //cài font chữ
+
+    srand(time(NULL));
+
     const char *font_name = "font__.ttf";
     TTF_Font *font = TTF_OpenFont(font_name, 24);
-    //khởi tạo âm thanh
+
     Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
     Mix_Chunk* chunk = NULL;
     chunk= Mix_LoadWAV("sound.wav");
-    //Mix_PlayChannel(-1, chunk, -1);
 
     Game_State game = {};
     Input_State input = {};
     spawn_piece(&game);
     game.piece.tetrino_index = 2;
-    //tạo vòng lặp để cửa sổ hiện ra liên tục
+
     bool quit = false;
     while (!quit)
     {
@@ -804,9 +756,7 @@ int main(int argc, char* argv[])
 						Mix_PlayChannel(-1, chunk, -1);
 				}
             }
-
         }
-
         int key_count;
         const u8 *key_states = SDL_GetKeyboardState(&key_count);
 
@@ -814,7 +764,6 @@ int main(int argc, char* argv[])
         {
             quit = true;
         }
-    //điều khiển
         Input_State prev_input = input;
 
         input.left = key_states[SDL_SCANCODE_LEFT];
@@ -837,11 +786,10 @@ int main(int argc, char* argv[])
 
         SDL_RenderPresent(renderer);
     }
-    //đóng cửa sổ và các chức năng
+
     Mix_CloseAudio();
     TTF_CloseFont(font);
     SDL_DestroyRenderer(renderer);
     SDL_Quit();
-
     return 0;
 }
