@@ -25,7 +25,6 @@ color(u8 r, u8 g, u8 b, u8 a)
     result.a = a;
     return result;
 }
-
 const Color BASE_COLORS[] = {
     color(0x28, 0x28, 0x28, 0xFF),
     color(0x2D, 0x99, 0x99, 0xFF),
@@ -62,7 +61,6 @@ const Color DARK_COLORS[] = {
 #define HEIGHT 22
 #define REAL_HEIGHT 20
 #define GRID_SIZE 30
-
 #define ARRAY_COUNT(x) (sizeof(x) / sizeof((x)[0]))
 
 const u8 CONST_LEVEL[] = {45,40,35,30,25,20,15,10,8,6,5,4,3,2,1};
@@ -122,6 +120,7 @@ const u8 KHOI_J[] = {
     0, 0, 0
 };
 
+
 const Khoigach KHOIGACH[] = {
     khoigach(KHOI_I, 4),
     khoigach(KHOI_O, 2),
@@ -131,6 +130,7 @@ const Khoigach KHOIGACH[] = {
     khoigach(KHOI_L, 3),
     khoigach(KHOI_J, 3),
 };
+
 enum Game_Phase
 {
     GAME_START,
@@ -138,15 +138,14 @@ enum Game_Phase
     GAME_LINE,
     GAME_GAMEOVER
 };
-
 struct Piece_State
 {
     u8 tetrino_index;
     int offset_row;
     int offset_col;
     int rotation;
+    int tmp;
 };
-
 struct Game_State
 {
     u8 board[WIDTH * HEIGHT];
@@ -154,8 +153,13 @@ struct Game_State
     int pending_line_count;
     Piece_State piece;
     Game_Phase phase;
-    int start_level,level,line_count,points;
-    float next_drop_time,highlight,time;
+    int start_level;
+    int level;
+    int line_count;
+    int points,score;
+    float next_drop_time;
+    float highlight;
+    float time;
 };
 
 struct Input_State
@@ -318,13 +322,11 @@ void merge_piece(Game_State *game)
         }
     }
 }
-
 inline int random_int(int min, int max)
 {
     int range = max - min;
     return min + rand() % range;
 }
-
 inline float get_time_to_next_drop(int level)
 {
     if (level > 15)
@@ -332,8 +334,8 @@ inline float get_time_to_next_drop(int level)
         level = 15;
     }
     return CONST_LEVEL[level] * CONST_SPEED;
-
 }
+
 void spawn_piece(Game_State *game)
 {
     game->piece = {};
@@ -380,7 +382,6 @@ inline int max(int x, int y)
 {
     return x > y ? x : y;
 }
-
 inline int get_lines_for_next_level(int start_level, int level)
 {
     int first_level_up_limit = min((start_level * 10 + 10),max(100, (start_level * 10 - 50)));
@@ -392,20 +393,23 @@ inline int get_lines_for_next_level(int start_level, int level)
     int diff = level - start_level;
     return first_level_up_limit + diff * 10;
 }
+
 void game_start(Game_State *game, const Input_State *input)
 {
     if (input->dup > 0)
     {
         ++game->start_level;
     }
-
     if (input->ddown > 0 && game->start_level > 0)
     {
         --game->start_level;
     }
-
     if (input->da > 0)
     {
+        if(game->score < game->points)
+        {
+            game->score=game->points;
+        }
         memset(game->board, 0, WIDTH * HEIGHT);
         game->level = game->start_level;
         game->line_count = 0;
@@ -414,7 +418,6 @@ void game_start(Game_State *game, const Input_State *input)
         game->phase = GAME_PLAY;
     }
 }
-
 void update_game_gameover(Game_State *game, const Input_State *input)
 {
     if (input->da > 0)
@@ -422,7 +425,6 @@ void update_game_gameover(Game_State *game, const Input_State *input)
         game->phase = GAME_START;
     }
 }
-
 void update_game_line(Game_State *game)
 {
     if (game->time >= game->highlight)
@@ -446,7 +448,6 @@ void update_game_line(Game_State *game)
         game->phase = GAME_PLAY;
     }
 }
-
 void game_play(Game_State *game , const Input_State *input)
 {
     Piece_State piece = game->piece;
@@ -462,34 +463,28 @@ void game_play(Game_State *game , const Input_State *input)
     {
         piece.rotation = (piece.rotation + 1) % 4;
     }
-
     if (check_piece_valid(&piece, game->board, WIDTH, HEIGHT))
     {
         game->piece = piece;
     }
-
     if (input->ddown > 0)
     {
         soft_drop(game);
     }
-
     if (input->da > 0)
     {
         while(soft_drop(game));
     }
-
     while (game->time >= game->next_drop_time)
     {
         soft_drop(game);
     }
-
     game->pending_line_count = find_lines(game->board, WIDTH, HEIGHT, game->lines);
     if (game->pending_line_count > 0)
     {
         game->phase = GAME_LINE;
         game->highlight = game->time + 0.5f;
     }
-
     int game_over_row = 0;
     if (!check_row_empty(game->board, WIDTH, game_over_row))
     {
@@ -524,6 +519,7 @@ void fill_rect(SDL_Renderer *renderer , int x , int y , int width, int height, C
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
     SDL_RenderFillRect(renderer, &rect);
 }
+
 void draw_rect(SDL_Renderer *renderer,
           int x, int y, int width, int height, Color color)
 {
@@ -535,6 +531,7 @@ void draw_rect(SDL_Renderer *renderer,
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
     SDL_RenderDrawRect(renderer, &rect);
 }
+
 void draw_cell(SDL_Renderer *renderer,
           int row, int col, u8 value,
           int offset_x, int offset_y,
@@ -554,7 +551,6 @@ void draw_cell(SDL_Renderer *renderer,
         draw_rect(renderer, x, y, GRID_SIZE, GRID_SIZE, base_color);
         return;
     }
-
     fill_rect(renderer, x, y, GRID_SIZE, GRID_SIZE, dark_color);
     fill_rect(renderer, x + edge, y,
            GRID_SIZE - edge, GRID_SIZE - edge, light_color);
@@ -603,7 +599,6 @@ void draw_board(SDL_Renderer *renderer,
         }
     }
 }
-
 void draw_string(SDL_Renderer *renderer,
                  TTF_Font *font,const char *text,
                  int x, int y,
@@ -637,9 +632,7 @@ void draw_string(SDL_Renderer *renderer,
 void render_game(const Game_State *game , SDL_Renderer *renderer , TTF_Font *font)
 {
     char buffer[4096];
-
-    Color highlight_color = color(0x00, 0xFF, 0xFF, 0xFF);
-
+    Color highlight_color = color(0x28, 0xFF, 0xFF, 0xFF);
     int margin_y = 60;
 
     draw_board(renderer, game->board, WIDTH, HEIGHT, 0, margin_y);
@@ -656,7 +649,6 @@ void render_game(const Game_State *game , SDL_Renderer *renderer , TTF_Font *fon
         --piece.offset_row;
 
         draw_piece(renderer, &piece, 0, margin_y, true);
-
     }
     if (game->phase == GAME_LINE)
     {
@@ -667,36 +659,42 @@ void render_game(const Game_State *game , SDL_Renderer *renderer , TTF_Font *fon
                 int x = 0;
                 int y = row * GRID_SIZE + margin_y;
 
-                fill_rect(renderer, x, y,WIDTH * GRID_SIZE, GRID_SIZE, highlight_color);
+                fill_rect(renderer, x, y,
+                          WIDTH * GRID_SIZE, GRID_SIZE, highlight_color);
             }
         }
     }
     else if (game->phase == GAME_GAMEOVER)
     {
-        Mix_Chunk* gameover = NULL;
-        gameover= Mix_LoadWAV("gameover.wav");
-        Mix_PlayChannel(-1, gameover, 0);
         int x = WIDTH * GRID_SIZE / 2;
         int y = (HEIGHT * GRID_SIZE + margin_y) / 2;
         draw_string(renderer, font, "GAME OVER ",
                     x, y, TEXT_ALIGN_CENTER, highlight_color);
         draw_string(renderer, font, "PLAY AGAIN!!!",
                     x, y+40, TEXT_ALIGN_CENTER, highlight_color);
-        snprintf(buffer, sizeof(buffer), "HIGHT SCORE: %d", game->points);
-        draw_string(renderer, font,buffer ,x, y-30, TEXT_ALIGN_CENTER, highlight_color);
+        if(game->score>=game->points)
+        {
+            snprintf(buffer, sizeof(buffer), "SCORE: %d", game->points);
+            draw_string(renderer, font,buffer ,x, y-30, TEXT_ALIGN_CENTER, highlight_color);
+        }
+        else
+        {
+            snprintf(buffer, sizeof(buffer), "HIGHT SCORE: %d", game->points);
+            draw_string(renderer, font,buffer ,x, y-30, TEXT_ALIGN_CENTER, highlight_color);
+        }
     }
     else if (game->phase == GAME_START)
     {
         int x = WIDTH * GRID_SIZE / 2;
         int y = (HEIGHT * GRID_SIZE + margin_y) / 2;
         draw_string(renderer, font, "PRESS START",
+                    x, y-30, TEXT_ALIGN_CENTER, highlight_color);
+        draw_string(renderer, font, "!!GOOD LUCK!!",
                     x, y, TEXT_ALIGN_CENTER, highlight_color);
-
         snprintf(buffer, sizeof(buffer), "STARTING LEVEL: %d", game->start_level);
         draw_string(renderer, font, buffer,
                     x, y + 30, TEXT_ALIGN_CENTER, highlight_color);
     }
-
     fill_rect(renderer,0, margin_y,
               WIDTH * GRID_SIZE, (HEIGHT - REAL_HEIGHT) * GRID_SIZE,
               color(0x00, 0x00, 0x00, 0x00));
@@ -709,20 +707,24 @@ void render_game(const Game_State *game , SDL_Renderer *renderer , TTF_Font *fon
 
     snprintf(buffer, sizeof(buffer), "POINTS: %d", game->points);
     draw_string(renderer, font, buffer, 50, 65, TEXT_ALIGN_LEFT, highlight_color);
+
+    snprintf(buffer, sizeof(buffer), "HIGH SCORE: %d", game->score);
+    draw_string(renderer, font, buffer, 200,5, TEXT_ALIGN_LEFT, highlight_color);
+
 }
 
 int main(int argc, char* argv[])
 {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) return 1;
+
     if (TTF_Init() < 0) return 2;
 
+    srand(time(NULL));
     SDL_Window *window = SDL_CreateWindow("GAME TETRIS - XẾP GẠCH",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,480,720,
         SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window,-1,
                     SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-
-    srand(time(NULL));
 
     const char *font_name = "font__.ttf";
     TTF_Font *font = TTF_OpenFont(font_name, 24);
@@ -786,10 +788,11 @@ int main(int argc, char* argv[])
 
         SDL_RenderPresent(renderer);
     }
-
     Mix_CloseAudio();
     TTF_CloseFont(font);
     SDL_DestroyRenderer(renderer);
     SDL_Quit();
+
     return 0;
 }
+
